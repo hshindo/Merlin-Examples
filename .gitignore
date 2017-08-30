@@ -1,0 +1,9 @@
+docs/build/
+docs/site/
+/dataset
+sandbox.jl
+benchmark.jl
+.data
+*.so
+*.dll
+/mkl
