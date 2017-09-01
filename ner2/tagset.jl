@@ -35,6 +35,7 @@ function decode(tagset::BIO, ids::Vector{Int})
         if !startswith(nexttag,"I-") && bpos > 0
             basetag = tagset.tags[ids[bpos]][3:end]
             push!(spans, (bpos,i,basetag))
+            bpos = 0
         end
     end
     spans
@@ -44,40 +45,32 @@ struct BIO2
     dict::Dict
     tags::Vector
 end
-BIO2() = BIO2(Dict("O"=>1), String["O"])
+BIO2() = BIO2(Dict(), String[])
 
 Base.length(tagset::BIO2) = length(tagset.tags)
 
 function encode(tagset::BIO2, tags::Vector{String})
     basetag = ""
-    ids = map(tags) do tag
-        tag == "O" && return 1
-        if tag == "_"
+    ids = Int[]
+    for tag in tags
+        if tag == "O"
+        elseif tag == "_"
             tag = "I-" * basetag
         else
             basetag = tag
             tag = "B-" * basetag
         end
-        get!(tagset.dict, tag) do
-            id = length(tagset.dict) + 1
-            push!(tagset.tags, tag)
-            id
+        for suffix in ("-1","-2")
+            t = tag * suffix
+            id = get!(tagset.dict, t) do
+                id = length(tagset.dict) + 1
+                push!(tagset.tags, t)
+                id
+            end
+            suffix == "-1" && push!(ids,id)
         end
     end
-    res = Int[]
-    for i = 1:length(ids)
-        prev = i == 1 ? "BOS" : tagset.tags[ids[i-1]]
-        next = i == length(ids) ? "EOS" : tagset.tags[ids[i+1]]
-        tag = tagset.tags[ids[i]]
-        tag = "$(tag):$(prev):$(next)"
-        id = get!(tagset.dict, tag) do
-            id = length(tagset.dict) + 1
-            push!(tagset.tags, tag)
-            id
-        end
-        push!(res, id)
-    end
-    res
+    ids
 end
 
 function decode(tagset::BIO2, ids::Vector{Int})
@@ -85,13 +78,14 @@ function decode(tagset::BIO2, ids::Vector{Int})
     bpos = 0
     for i = 1:length(ids)
         tag = tagset.tags[ids[i]]
-        startswith(tag, "O") && continue
+        startswith(tag, "O-") && continue
         startswith(tag, "B-") && (bpos = i)
         nexttag = i == length(ids) ? "O" : tagset.tags[ids[i+1]]
         if !startswith(nexttag,"I-") && bpos > 0
-            strs = Vector{String}(split(tagset.tags[ids[bpos]], ":"))
-            basetag = strs[1][3:end]
+            strs = Vector{String}(split(tagset.tags[ids[bpos]], "-"))
+            basetag = strs[2]
             push!(spans, (bpos,i,basetag))
+            bpos = 0
         end
     end
     spans
