@@ -4,7 +4,7 @@ struct Model
     fs
 end
 
-function Model(wordembeds::Matrix{T}, charembeds::Matrix{T}, ntags::Int) where {T}
+function Model{T}(wordembeds::Matrix{T}, charembeds::Matrix{T}, ntags::Int)
     fw = @graph x begin
         Lookup(wordembeds)(x)
     end
@@ -12,19 +12,24 @@ function Model(wordembeds::Matrix{T}, charembeds::Matrix{T}, ntags::Int) where {
     d = size(charembeds, 1)
     fc = @graph x begin
         x = Lookup(charembeds)(x)
-        x = Conv1D(T,5d,5d,2d,d)(x)
+        x = Conv1D(T,5,d,5d,2,1)(x)
         max(x, 2)
     end
 
     d = size(wordembeds,1) + size(charembeds,1)*5
-    # n1 = Node(Conv1D(T,10d,2d,4d,2d), n)
-    fs = @graph x begin
-        x = Conv1D(T,5d,2d,2d,d)(x)
+    dh = 300
+    fs = @graph (x,b) begin
+        x = Conv1D(T,5,d,dh,2,1)(x)
         x = relu(x)
-        # xx = dropout(x, 0.5, b)
-        x = Conv1D(T,6d,2d,2d,2d)(x)
-        x = relu(x)
-        Linear(T,2d,ntags)(x)
+        x1 = dropout(x, 0.3, b)
+        x1 = Conv1D(T,5,dh,dh,2,1)(x1)
+        x1 = relu(x1)
+        x += x1
+        x1 = dropout(x, 0.3, b)
+        x1 = Conv1D(T,5,dh,dh,2,1)(x1)
+        x1 = relu(x1)
+        x += x1
+        Linear(T,dh,ntags)(x)
     end
     Model(fw, fc, fs)
 end
@@ -33,6 +38,6 @@ function (m::Model)(word::Var, char::Var, istrain::Bool)
     w = m.fw(word)
     c = m.fc(char)
     c.batchdims = w.batchdims
-    s = cat(1, w, c)
-    m.fs(s)
+    x = cat(1, w, c)
+    m.fs(x,Var(istrain))
 end

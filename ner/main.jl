@@ -6,6 +6,7 @@ include("ner.jl")
 include("model.jl")
 
 const wordembeds_file = ".data/glove.6B.100d.h5"
+const wordembeds_file2 = ".data/word2vec_nyt100d.h5"
 #const datapath = joinpath(dirname(@__FILE__), ".data")
 
 # training
