@@ -76,9 +76,10 @@ function train(ner::NER, trainfile::String, testfile::String)
         #opt.rate = 0.00075
 
         train_data = makebatch(16, train_w, train_c, train_t)
+        Merlin.config.train = true
         function train_f(data::Tuple)
             w, c, t = data
-            y = ner.model(w, c, true)
+            y = ner.model(w, c)
             softmax_crossentropy(t, y)
         end
         loss = minimize!(train_f, opt, collect(zip(train_data...)))
@@ -86,9 +87,10 @@ function train(ner::NER, trainfile::String, testfile::String)
 
         # test
         println("Testing...")
+        Merlin.config.train = false
         function test_f(data::Tuple)
             w, c = data
-            y = ner.model(w, c, false)
+            y = ner.model(w, c)
             vec(argmax(y.data,1))
         end
         test_data = collect(zip(test_w, test_c))
@@ -103,7 +105,7 @@ function train(ner::NER, trainfile::String, testfile::String)
     end
 end
 
-function fscore(golds::Vector{T}, preds::Vector{T}) where T
+function fscore{T}(golds::Vector{T}, preds::Vector{T})
     set = intersect(Set(golds), Set(preds))
     count = length(set)
     prec = round(count/length(preds), 5)

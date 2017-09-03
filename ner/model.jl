@@ -18,14 +18,14 @@ function Model{T}(wordembeds::Matrix{T}, charembeds::Matrix{T}, ntags::Int)
 
     d = size(wordembeds,1) + size(charembeds,1)*5
     dh = 300
-    fs = @graph (x,b) begin
+    fs = @graph x begin
         x = Conv1D(T,5,d,dh,2,1)(x)
         x = relu(x)
-        x1 = dropout(x, 0.3, b)
+        x1 = dropout(x, 0.3)
         x1 = Conv1D(T,5,dh,dh,2,1)(x1)
         x1 = relu(x1)
         x += x1
-        x1 = dropout(x, 0.3, b)
+        x1 = dropout(x, 0.3)
         x1 = Conv1D(T,5,dh,dh,2,1)(x1)
         x1 = relu(x1)
         x += x1
@@ -34,10 +34,10 @@ function Model{T}(wordembeds::Matrix{T}, charembeds::Matrix{T}, ntags::Int)
     Model(fw, fc, fs)
 end
 
-function (m::Model)(word::Var, char::Var, istrain::Bool)
+function (m::Model)(word::Var, char::Var)
     w = m.fw(word)
     c = m.fc(char)
     c.batchdims = w.batchdims
     x = cat(1, w, c)
-    m.fs(x,Var(istrain))
+    m.fs(x)
 end
