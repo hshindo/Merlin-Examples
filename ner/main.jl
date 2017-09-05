@@ -11,7 +11,9 @@ const wordembeds_file2 = ".data/word2vec_nyt100d.h5"
 
 # training
 ner = NER()
-train(ner, ".data/eng.train", ".data/eng.testb")
+traindata = Dataset(ner, ".data/eng.train")
+testdata = Dataset(ner, ".data/eng.testb")
+train(ner, traindata, testdata)
 #save("NER.jld2", Dict("a"=>seg))
 
 # decoding

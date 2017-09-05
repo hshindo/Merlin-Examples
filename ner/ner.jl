@@ -30,8 +30,15 @@ function encode(ner::NER, words::Vector{String})
     w, cs
 end
 
+struct Dataset
+    w
+    c
+    t
+end
+
 function readdata!(ner::NER, path::String)
-    data_w, data_c, data_t = Var[], Var[], Var[]
+    #data_w, data_c, data_t = Vector{Int}[], Vector{Vector{Int}}[], Vector{Int}[]
+    datasets = Dataset[]
     words, tags = String[], String[]
     lines = open(readlines, path)
     for i = 1:length(lines)
@@ -40,11 +47,14 @@ function readdata!(ner::NER, path::String)
             isempty(words) && continue
             w, cs = encode(ner, words)
             t = encode(ner.tagset, tags)
-            push!(data_w, Var(w))
-            batchdims = map(length, cs)
-            c = cat(1, cs...)
-            push!(data_c, Var(c,batchdims))
-            push!(data_t, Var(t))
+            push!(datasets, Dataset(w,cs,t))
+            #push!(data_w, w)
+            #push!(data_c, cs)
+            #push!(data_t, t)
+            #batchdims = map(length, cs)
+            #c = cat(1, cs...)
+            #push!(data_c, Var(c,batchdims))
+            #push!(data_t, Var(t))
             empty!(words)
             empty!(tags)
         else
@@ -54,14 +64,12 @@ function readdata!(ner::NER, path::String)
             #word = replace(word, r"[0-9]", '0')
         end
     end
-    data_w, data_c, data_t
+    datasets
 end
 
-function train(ner::NER, trainfile::String, testfile::String)
-    train_w, train_c, train_t = readdata!(ner, trainfile)
-    test_w, test_c, test_t = readdata!(ner, testfile)
-    info("# Training sentences:\t$(length(train_w))")
-    info("# Testing sentences:\t$(length(test_w))")
+function train(ner::NER, traindata::Vector{Dataset}, testdata::Vector{Dataset})
+    info("# Training sentences:\t$(length(traindata))")
+    info("# Testing sentences:\t$(length(testdata))")
     info("# Words:\t$(length(ner.worddict))")
     info("# Chars:\t$(length(ner.chardict))")
     info("# Tags:\t$(length(ner.tagset))")
@@ -75,14 +83,32 @@ function train(ner::NER, trainfile::String, testfile::String)
         opt.rate = 0.001 / (1 + 0.05*(epoch-1))
         #opt.rate = 0.00075
 
-        train_data = makebatch(16, train_w, train_c, train_t)
-        Merlin.config.train = true
-        function train_f(data::Tuple)
-            w, c, t = data
-            y = ner.model(w, c)
-            softmax_crossentropy(t, y)
+        #idxs = randperm(length(traindata))
+        shuffle!(traindata)
+        batchsize = 16
+        batches = Dataset[]
+        for i = 1:batchsize:length(traindata)
+            j = min(i+batchsize-1, length(idxs))
+            data = traindata[i:j]
+            w = cat(1, map(x -> x.w, data)...)
+            c = cat(1, map(x -> x.c, data)...)
+            t = cat(1, map(x -> x.t, data)...)
+            for x in (w,c,t)
+                x.f = nothing
+                x.args = ()
+            end
+            push!(batches, Dataset(w,c,t))
         end
-        loss = minimize!(train_f, opt, collect(zip(train_data...)))
+
+        #train_data = makebatch(16, train_w, train_c, train_t)
+        #train_data = collect(zip(train_data...))
+        #shuffle!(train_data)
+        Merlin.config.train = true
+        function train_f(data::Dataset)
+            y = ner.model(data.w, data.c)
+            softmax_crossentropy(data.t, y)
+        end
+        loss = minimize!(train_f, opt, train_data)
         println("Loss:\t$loss")
 
         # test
