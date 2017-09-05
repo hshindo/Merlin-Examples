@@ -83,19 +83,19 @@ function train(ner::NER, traindata::Vector{Dataset}, testdata::Vector{Dataset})
         opt.rate = 0.001 / (1 + 0.05*(epoch-1))
         #opt.rate = 0.00075
 
-        #idxs = randperm(length(traindata))
         shuffle!(traindata)
         batchsize = 16
         batches = Dataset[]
         for i = 1:batchsize:length(traindata)
             j = min(i+batchsize-1, length(idxs))
             data = traindata[i:j]
-            w = cat(1, map(x -> x.w, data)...)
-            c = cat(1, map(x -> x.c, data)...)
-            t = cat(1, map(x -> x.t, data)...)
-            for x in (w,c,t)
-                x.f = nothing
-                x.args = ()
+            ws = map(x -> x.w, data)
+            cs = Vector{Int}[]
+            foreach(x -> append!(cs,x.c), data)
+            ts = map(x -> x.t, data)
+            w, c, t = map((ws,cs,ts)) do xs
+                batchdims = map(length, xs)
+                Var(cat(1,xs...), batchdims)
             end
             push!(batches, Dataset(w,c,t))
         end
