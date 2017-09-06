@@ -37,7 +37,6 @@ struct Dataset
 end
 
 function readdata!(ner::NER, path::String)
-    #data_w, data_c, data_t = Vector{Int}[], Vector{Vector{Int}}[], Vector{Int}[]
     datasets = Dataset[]
     words, tags = String[], String[]
     lines = open(readlines, path)
@@ -73,6 +72,20 @@ function train(ner::NER, traindata::Vector{Dataset}, testdata::Vector{Dataset})
     info("# Words:\t$(length(ner.worddict))")
     info("# Chars:\t$(length(ner.chardict))")
     info("# Tags:\t$(length(ner.tagset))")
+    _testdata = Dataset[]
+    for i = 1:100:length(testdata)
+        j = min(i+100-1, length(testdata))
+        data = testdata[i:j]
+        ws = map(x -> x.w, data)
+        w = Var(cat(1,ws...), map(length,ws))
+        cs = Vector{Int}[]
+        foreach(x -> append!(cs,x.c), data)
+        c = Var(cat(1,cs...), map(length,cs))
+        ts = map(x -> x.t, data)
+        t = Var(cat(1,ts...), map(length,ts))
+        push!(_testdata, Dataset(w,c,t))
+    end
+    testdata = _testdata
 
     wordembeds = h5read(wordembeds_file, "value")
     charembeds = randn(Float32, 20, length(ner.chardict)) * 0.223f0
@@ -87,41 +100,27 @@ function train(ner::NER, traindata::Vector{Dataset}, testdata::Vector{Dataset})
         batchsize = 16
         batches = Dataset[]
         for i = 1:batchsize:length(traindata)
-            j = min(i+batchsize-1, length(idxs))
+            j = min(i+batchsize-1, length(traindata))
             data = traindata[i:j]
             ws = map(x -> x.w, data)
+            w = Var(cat(1,ws...), map(length,ws))
             cs = Vector{Int}[]
             foreach(x -> append!(cs,x.c), data)
+            c = Var(cat(1,cs...), map(length,cs))
             ts = map(x -> x.t, data)
-            w, c, t = map((ws,cs,ts)) do xs
-                batchdims = map(length, xs)
-                Var(cat(1,xs...), batchdims)
-            end
+            t = Var(cat(1,ts...), map(length,ts))
             push!(batches, Dataset(w,c,t))
         end
 
-        #train_data = makebatch(16, train_w, train_c, train_t)
-        #train_data = collect(zip(train_data...))
-        #shuffle!(train_data)
         Merlin.config.train = true
-        function train_f(data::Dataset)
-            y = ner.model(data.w, data.c)
-            softmax_crossentropy(data.t, y)
-        end
-        loss = minimize!(train_f, opt, train_data)
+        loss = minimize!(ner.model, opt, batches)
         println("Loss:\t$loss")
 
         # test
         println("Testing...")
         Merlin.config.train = false
-        function test_f(data::Tuple)
-            w, c = data
-            y = ner.model(w, c)
-            vec(argmax(y.data,1))
-        end
-        test_data = collect(zip(test_w, test_c))
-        pred = cat(1, map(test_f, test_data)...)
-        gold = cat(1, map(t -> t.data, test_t)...)
+        pred = cat(1, map(ner.model, testdata)...)
+        gold = cat(1, map(x -> x.t.data, testdata)...)
         length(pred) == length(gold) || throw("Length mismatch.")
 
         ranges_p = decode(ner.tagset, pred)
