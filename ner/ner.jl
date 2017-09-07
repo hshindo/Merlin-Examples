@@ -18,42 +18,32 @@ function NER()
     NER(worddict, chardict, BIOES(), nothing)
 end
 
-function encode(ner::NER, words::Vector{String})
+function encode_word(ner::NER, words::Vector{String})
     worddict = ner.worddict
-    chardict = ner.chardict
     unkword = worddict["UNKNOWN"]
-    unkchar = chardict["UNKNOWN"]
-    w = map(w -> get(worddict,lowercase(w),unkword), words)
-    cs = map(words) do w
-        map(c -> get(chardict,string(c),unkchar), Vector{Char}(w))
-    end
-    w, cs
+    map(w -> get(worddict,lowercase(w),unkword), words)
 end
 
-struct Dataset
-    w
-    c
-    t
+function encode_char(ner::NER, words::Vector{String})
+    chardict = ner.chardict
+    unkchar = chardict["UNKNOWN"]
+    map(words) do w
+        map(c -> get(chardict,string(c),unkchar), Vector{Char}(w))
+    end
 end
 
 function readdata!(ner::NER, path::String)
-    datasets = Dataset[]
+    data = []
     words, tags = String[], String[]
     lines = open(readlines, path)
     for i = 1:length(lines)
         line = lines[i]
         if isempty(line) || i == length(lines)
             isempty(words) && continue
-            w, cs = encode(ner, words)
+            w = encode_word(ner, words)
+            c = encode_char(ner, words)
             t = encode(ner.tagset, tags)
-            push!(datasets, Dataset(w,cs,t))
-            #push!(data_w, w)
-            #push!(data_c, cs)
-            #push!(data_t, t)
-            #batchdims = map(length, cs)
-            #c = cat(1, cs...)
-            #push!(data_c, Var(c,batchdims))
-            #push!(data_t, Var(t))
+            push!(data, (w,c,t))
             empty!(words)
             empty!(tags)
         else
@@ -63,27 +53,29 @@ function readdata!(ner::NER, path::String)
             #word = replace(word, r"[0-9]", '0')
         end
     end
-    datasets
+    data
 end
 
-function train(ner::NER, traindata::Vector{Dataset}, testdata::Vector{Dataset})
+function train(ner::NER, traindata::Vector, testdata::Vector)
     info("# Training sentences:\t$(length(traindata))")
     info("# Testing sentences:\t$(length(testdata))")
     info("# Words:\t$(length(ner.worddict))")
     info("# Chars:\t$(length(ner.chardict))")
     info("# Tags:\t$(length(ner.tagset))")
-    _testdata = Dataset[]
-    for i = 1:100:length(testdata)
-        j = min(i+100-1, length(testdata))
+    _testdata = []
+    for i = 1:200:length(testdata)
+        j = min(i+200-1, length(testdata))
         data = testdata[i:j]
-        ws = map(x -> x.w, data)
-        w = Var(cat(1,ws...), map(length,ws))
-        cs = Vector{Int}[]
-        foreach(x -> append!(cs,x.c), data)
-        c = Var(cat(1,cs...), map(length,cs))
-        ts = map(x -> x.t, data)
-        t = Var(cat(1,ts...), map(length,ts))
-        push!(_testdata, Dataset(w,c,t))
+        w = map(x -> x[1], data)
+        batchsize_w = Var(map(length,w))
+        w = Var(cat(1,w...))
+        c = Vector{Int}[]
+        foreach(x -> append!(c,x[2]), data)
+        batchsize_c = Var(map(length,c))
+        c = Var(cat(1,c...))
+        t = map(x -> x[3], data)
+        t = Var(cat(1,t...))
+        push!(_testdata, (w,batchsize_w,c,batchsize_c,t))
     end
     testdata = _testdata
 
@@ -98,30 +90,32 @@ function train(ner::NER, traindata::Vector{Dataset}, testdata::Vector{Dataset})
 
         shuffle!(traindata)
         batchsize = 16
-        batches = Dataset[]
+        _traindata = []
         for i = 1:batchsize:length(traindata)
             j = min(i+batchsize-1, length(traindata))
             data = traindata[i:j]
-            ws = map(x -> x.w, data)
-            w = Var(cat(1,ws...), map(length,ws))
-            cs = Vector{Int}[]
-            foreach(x -> append!(cs,x.c), data)
-            c = Var(cat(1,cs...), map(length,cs))
-            ts = map(x -> x.t, data)
-            t = Var(cat(1,ts...), map(length,ts))
-            push!(batches, Dataset(w,c,t))
+            w = map(x -> x[1], data)
+            batchsize_w = Var(map(length,w))
+            w = Var(cat(1,w...))
+            c = Vector{Int}[]
+            foreach(x -> append!(c,x[2]), data)
+            batchsize_c = Var(map(length,c))
+            c = Var(cat(1,c...))
+            t = map(x -> x[3], data)
+            t = Var(cat(1,t...))
+            push!(_traindata, (w,batchsize_w,c,batchsize_c,t))
         end
 
         Merlin.config.train = true
-        loss = minimize!(ner.model, opt, batches)
+        loss = minimize!(ner.model, opt, _traindata)
         println("Loss:\t$loss")
 
         # test
         println("Testing...")
         Merlin.config.train = false
         pred = cat(1, map(ner.model, testdata)...)
-        gold = cat(1, map(x -> x.t.data, testdata)...)
-        length(pred) == length(gold) || throw("Length mismatch.")
+        gold = cat(1, map(x -> x[end].data, testdata)...)
+        length(pred) == length(gold) || throw("Length mismatch: $(length(pred)), $(length(gold))")
 
         ranges_p = decode(ner.tagset, pred)
         ranges_g = decode(ner.tagset, gold)
