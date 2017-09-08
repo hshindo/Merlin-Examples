@@ -18,15 +18,34 @@ function Model{T}(wordembeds::Matrix{T}, charembeds::Matrix{T}, ntags::Int)
 
     fs = @graph (x,dims) begin
         d = size(wordembeds,1) + size(charembeds,1)*5
-        dh = 300
+        dh = 350
         x = Conv1D(T,5,d,dh,2,1)(x, dims)
         x = relu(x)
 
         x1 = dropout(x, 0.3)
-        x1 = Conv1D(T,5,dh,dh,2,1)(x1, dims)
+        x1 = Conv1D(T,5,dh,dh,2,1)(x1,dims)
         x1 = relu(x1)
-        x1 = Standardize(T,(dh,10))(x1)
         x += x1
+        x = Standardize(T,(dh,10))(x)
+
+        x1 = dropout(x, 0.3)
+        x1 = Conv1D(T,5,dh,dh,2,1)(x1,dims)
+        x1 = relu(x1)
+        x += x1
+        x = Standardize(T,(dh,10))(x)
+
+        x1 = dropout(x, 0.3)
+        x1 = Conv1D(T,5,dh,dh,2,1)(x1,dims)
+        x1 = relu(x1)
+        x += x1
+        x = Standardize(T,(dh,10))(x)
+
+        x1 = dropout(x, 0.3)
+        x1 = Conv1D(T,5,dh,dh,2,1)(x1,dims)
+        x1 = relu(x1)
+        x += x1
+        x = Standardize(T,(dh,10))(x)
+
 
         # biaffine
         #h1 = Linear(T,dh,dh)(x)
