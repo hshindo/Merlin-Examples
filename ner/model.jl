@@ -22,19 +22,23 @@ function Model{T}(wordembeds::Matrix{T}, charembeds::Matrix{T}, ntags::Int)
         x = Conv1D(T,5,d,dh,2,1)(x, dims)
         x = relu(x)
 
-        #x1 = dropout(x, 0.3)
-        #x1 = Conv1D(T,5,dh,dh,2,1)(x1,dims)
-        #x1 = relu(x1)
-        #x += x1
-        #x = Standardize(T,(dh,10))(x)
+        x1 = dropout(x, 0.3)
+        x1 = Conv1D(T,5,dh,dh,2,1)(x1,dims)
+        x1 = relu(x1)
+        x += x1
+        x = Standardize(T,(dh,10))(x)
 
-        # biaffine
-        h1 = Linear(T,dh,dh)(x)
-        h1 = relu(h1)
-        h2 = Linear(T,dh,dh)(x)
-        h2 = relu(h2)
-        u = Linear(T,dh,dh)(h1)
-        x = BLAS.gemm('T', 'N', 1, h2, u)
+        x1 = dropout(x, 0.3)
+        x1 = Conv1D(T,5,dh,dh,2,1)(x1,dims)
+        x1 = relu(x1)
+        x += x1
+        x = Standardize(T,(dh,10))(x)
+
+        x1 = dropout(x, 0.3)
+        x1 = Conv1D(T,5,dh,dh,2,1)(x1,dims)
+        x1 = relu(x1)
+        x += x1
+        x = Standardize(T,(dh,10))(x)
 
         Linear(T,dh,ntags)(x)
     end

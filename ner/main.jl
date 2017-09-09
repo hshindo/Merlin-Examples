@@ -1,7 +1,8 @@
 using HDF5
 using Merlin
 
-include("tagset.jl")
+include("eval.jl")
+include("tagset/bioes.jl")
 include("ner.jl")
 include("model.jl")
 
@@ -11,8 +12,8 @@ const wordembeds_file2 = ".data/word2vec_nyt100d.h5"
 
 # training
 ner = NER()
-traindata = readdata!(ner, ".data/eng.train")
-testdata = readdata!(ner, ".data/eng.testb")
+traindata = readdata!(ner, ".data/eng.train.BIOES")
+testdata = readdata!(ner, ".data/eng.testb.BIOES")
 train(ner, traindata, testdata)
 #save("NER.jld2", Dict("a"=>seg))
 
