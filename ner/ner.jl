@@ -63,8 +63,9 @@ function train(ner::NER, traindata::Vector, testdata::Vector)
     info("# Chars:\t$(length(ner.chardict))")
     info("# Tags:\t$(length(ner.tagset))")
     _testdata = []
-    for i = 1:200:length(testdata)
-        j = min(i+200-1, length(testdata))
+    batchsize = 1
+    for i = 1:batchsize:length(testdata)
+        j = min(i+batchsize-1, length(testdata))
         data = testdata[i:j]
         w = map(x -> x[1], data)
         batchsize_w = Var(map(length,w))
@@ -80,13 +81,14 @@ function train(ner::NER, traindata::Vector, testdata::Vector)
     testdata = _testdata
 
     wordembeds = h5read(wordembeds_file, "value")
-    charembeds = rand(Float32, 20, length(ner.chardict)) * 2sqrt(0.1f0) - sqrt(0.1f0)
+    charembeds = randn(Float32, 20, length(ner.chardict)) * sqrt(0.05f0)
     ner.model = Model(wordembeds, charembeds, length(ner.tagset))
     opt = SGD()
-    batchsize = 16
+    batchsize = 1
     for epoch = 1:50
         println("Epoch:\t$epoch")
-        opt.rate = 0.001 / (1 + 0.05*(epoch-1))
+        opt.rate = 0.01 / (1 + 0.05*(epoch-1))
+        println("opt rate: $(opt.rate)")
         #opt.rate = 0.00075
 
         shuffle!(traindata)
