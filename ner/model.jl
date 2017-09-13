@@ -9,29 +9,23 @@ function Model{T}(wordembeds::Matrix{T}, charembeds::Matrix{T}, ntags::Int)
         Lookup(wordembeds)(x)
     end
 
-    fc = @graph (x,dims) begin
+    fc = @graph x begin
         d = size(charembeds, 1)
         x = Lookup(charembeds)(x)
-        x = Conv1D(T,5,d,5d,2,1)(x, dims)
-        max_batch(x, dims)
+        x = Conv1D(T,5,d,5d,2,1)(x)
+        max(x, 2)
     end
 
-    fs = @graph (x,dims) begin
+    fs = @graph x begin
         d = size(wordembeds,1) + size(charembeds,1)*5
         dh = 300
-        x = Conv1D(T,5,d,dh,2,1)(x, dims)
+        x = Conv1D(T,5,d,dh,2,1)(x)
         x = relu(x)
 
         x1 = dropout(x, 0.3)
-        x1 = Conv1D(T,5,dh,dh,2,1)(x1,dims)
+        x1 = Conv1D(T,5,dh,dh,2,1)(x1)
         x1 = relu(x1)
-        #x1 = Standardize(T,(dh,10))(x1)
-        x += x1
-
-        x1 = dropout(x, 0.3)
-        x1 = Conv1D(T,5,dh,dh,2,1)(x1,dims)
-        x1 = relu(x1)
-        #x1 = Standardize(T,(dh,10))(x1)
+        x1 = Standardize(T,(dh,10))(x1)
         x += x1
 
         Linear(T,dh,ntags)(x)
@@ -40,7 +34,7 @@ function Model{T}(wordembeds::Matrix{T}, charembeds::Matrix{T}, ntags::Int)
 end
 
 function (m::Model)(data::Tuple)
-    w, batchsize_w, c, batchsize_c, t = data
+    w, c, t = data
 
     #ps = Matrix{Float32}[]
     #for i in batchsize_w.data
@@ -49,9 +43,10 @@ function (m::Model)(data::Tuple)
     #p = Var(cat(2, ps...))
 
     w = m.fw(w)
-    c = m.fc(c, batchsize_c)
-    x = concat(1, w, c)
-    y = m.fs(x, batchsize_w)
+    c = m.fc(c)
+    c.batchdims = w.batchdims
+    x = cat(1, w, c)
+    y = m.fs(x)
     if Merlin.config.train
         softmax_crossentropy(t, y)
     else

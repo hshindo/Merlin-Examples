@@ -21,15 +21,23 @@ end
 function encode_word(ner::NER, words::Vector{String})
     worddict = ner.worddict
     unkword = worddict["UNKNOWN"]
-    map(w -> get(worddict,lowercase(w),unkword), words)
+    w = map(w -> get(worddict,lowercase(w),unkword), words)
+    Var(w)
 end
 
 function encode_char(ner::NER, words::Vector{String})
     chardict = ner.chardict
     unkchar = chardict["UNKNOWN"]
-    map(words) do w
-        map(c -> get(chardict,string(c),unkchar), Vector{Char}(w))
+    batchdims = Int[]
+    data = Int[]
+    for w in words
+        chars = Vector{Char}(w)
+        push!(batchdims, length(chars))
+        for c in chars
+            push!(data, get(chardict,string(c),unkchar))
+        end
     end
+    Var(data, batchdims)
 end
 
 function readdata!(ner::NER, path::String)
@@ -42,7 +50,7 @@ function readdata!(ner::NER, path::String)
             isempty(words) && continue
             w = encode_word(ner, words)
             c = encode_char(ner, words)
-            t = encode(ner.tagset, tags)
+            t = Var(encode(ner.tagset,tags))
             push!(data, (w,c,t))
             empty!(words)
             empty!(tags)
@@ -56,61 +64,60 @@ function readdata!(ner::NER, path::String)
     data
 end
 
+function makebatch(batchsize::Int, data::Vector)
+    batches = []
+    for i = 1:batchsize:length(data)
+        j = min(i+batchsize-1, length(data))
+        batch = data[i:j]
+        b = ntuple(length(data[1])) do k
+            x = map(x -> x[k], batch)
+            x = cat(1, x...)
+            x.args = ()
+            x.f = nothing
+            x
+        end
+        push!(batches, b)
+    end
+    batches
+end
+
 function train(ner::NER, traindata::Vector, testdata::Vector)
     info("# Training sentences:\t$(length(traindata))")
     info("# Testing sentences:\t$(length(testdata))")
     info("# Words:\t$(length(ner.worddict))")
     info("# Chars:\t$(length(ner.chardict))")
     info("# Tags:\t$(length(ner.tagset))")
-    _testdata = []
-    batchsize = 1
-    for i = 1:batchsize:length(testdata)
-        j = min(i+batchsize-1, length(testdata))
-        data = testdata[i:j]
-        w = map(x -> x[1], data)
-        batchsize_w = Var(map(length,w))
-        w = Var(cat(1,w...))
-        c = Vector{Int}[]
-        foreach(x -> append!(c,x[2]), data)
-        batchsize_c = Var(map(length,c))
-        c = Var(cat(1,c...))
-        t = map(x -> x[3], data)
-        t = Var(cat(1,t...))
-        push!(_testdata, (w,batchsize_w,c,batchsize_c,t))
+    testdata = makebatch(200, testdata)
+
+    #=
+    ntags = length(ner.tagset)
+    Y1 = zeros(Float32, ntags, ntags)
+    for (w,c,t) in traindata
+        for i = 1:length(t.data)-1
+            Y1[t.data[i+1],t.data[i]] += 1
+        end
     end
-    testdata = _testdata
+    Y1 = Y1 ./ sum(Y1,1)
+    =#
 
     wordembeds = h5read(wordembeds_file, "value")
-    charembeds = randn(Float32, 20, length(ner.chardict)) * sqrt(0.05f0)
+    charembeds = randn(Float32, 20, length(ner.chardict)) * sqrt(0.01f0)
     ner.model = Model(wordembeds, charembeds, length(ner.tagset))
     opt = SGD()
-    batchsize = 1
+    batchsize = 20
     for epoch = 1:50
         println("Epoch:\t$epoch")
-        opt.rate = 0.01 / (1 + 0.05*(epoch-1))
+        opt.rate = 0.0005 * batchsize / sqrt(batchsize) / (1 + 0.05*(epoch-1))
         println("opt rate: $(opt.rate)")
         #opt.rate = 0.00075
 
-        shuffle!(traindata)
-        _traindata = []
-        for i = 1:batchsize:length(traindata)
-            j = min(i+batchsize-1, length(traindata))
-            data = traindata[i:j]
-            w = map(x -> x[1], data)
-            batchsize_w = Var(map(length,w))
-            w = Var(cat(1,w...))
-            c = Vector{Int}[]
-            foreach(x -> append!(c,x[2]), data)
-            batchsize_c = Var(map(length,c))
-            c = Var(cat(1,c...))
-            t = map(x -> x[3], data)
-            t = Var(cat(1,t...))
-            push!(_traindata, (w,batchsize_w,c,batchsize_c,t))
-        end
-
         Merlin.config.train = true
-        loss = minimize!(ner.model, opt, _traindata)
+        shuffle!(traindata)
+        batches = makebatch(batchsize, traindata)
+        loss = minimize!(ner.model, opt, batches)
         println("Loss:\t$loss")
+        #println("Y1:")
+        #display(softmax(ner.model.Y1.data))
 
         # test
         println("Testing...")
