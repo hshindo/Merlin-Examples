@@ -28,6 +28,12 @@ function Model{T}(wordembeds::Matrix{T}, charembeds::Matrix{T}, ntags::Int)
         x1 = Standardize(T,(dh,10))(x1)
         x += x1
 
+        x2 = dropout(x1, 0.3)
+        x2 = Conv1D(T,5,dh,dh,2,1)(x2)
+        x2 = relu(x2)
+        x2 = Standardize(T,(dh,10))(x2)
+        x += x2
+
         Linear(T,dh,ntags)(x)
     end
     Model(fw, fc, fs)
