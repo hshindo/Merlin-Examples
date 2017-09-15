@@ -16,23 +16,16 @@ function Model{T}(wordembeds::Matrix{T}, charembeds::Matrix{T}, ntags::Int)
         max(x, 2)
     end
 
-    d = size(wordembeds,1) + size(charembeds,1)*5
+    dh = 300
     fs = @graph x begin
-        dh = 300
+        d = size(wordembeds,1) + size(charembeds,1)*5
+        x = Conv1D(T,5,d,dh,2,1)(x)
+        x = relu(x)
 
-        #c = Linear(T,d,dh)(x)
-        #c = relu(c)
-        #c = Standardize(T,(dh,10))(c)
-        #f = Linear(T,d,dh)(x)
-        #f = sigmoid(f)
-        #x = Linear(T,d,dh)(x)
-        #x = f .* c + (1-f) .* x
-
-        #x1 = dropout(x, 0.3)
-        #x1 = Conv1D(T,5,dh,dh,2,1)(x1)
-        #x1 = sigmoid(x1)
-        # x1 = Standardize(T,(dh,10))(x1)
-        #x = x1 .* x
+        x1 = dropout(x, 0.3)
+        x1 = Conv1D(T,5,dh,dh,2,1)(x1)
+        x1 = relu(x1)
+        x1 = Standardize(T,(dh,10))(x1)
         x += x1
 
         Linear(T,dh,ntags)(x)
@@ -46,17 +39,22 @@ function (m::Model)(data::Tuple)
     c = m.fc(c)
     c.batchdims = w.batchdims
     x = cat(1, w, c)
-    for b = 1:length(w.batchdims)
-        n = w.batchdims[b]
-        for i = 1:n
-            
-        end
-    end
-
     y = m.fs(x)
     if Merlin.config.train
         softmax_crossentropy(t, y)
     else
         vec(argmax(y.data,1))
     end
+end
+
+function setup_posembeds{T}(::Type{T}, dim::Int, len::Int)
+    embeds = zeros(T, dim, len)
+    for p = 1:len
+        for i = 1:2:dim
+            x = p / 10000^((i-1)/dim)
+            embeds[i,p] = sin(x)
+            embeds[i+1,p] = cos(x)
+        end
+    end
+    embeds
 end

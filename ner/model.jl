@@ -16,9 +16,9 @@ function Model{T}(wordembeds::Matrix{T}, charembeds::Matrix{T}, ntags::Int)
         max(x, 2)
     end
 
+    dh = 300
     fs = @graph x begin
         d = size(wordembeds,1) + size(charembeds,1)*5
-        dh = 300
         x = Conv1D(T,5,d,dh,2,1)(x)
         x = relu(x)
 
@@ -27,18 +27,6 @@ function Model{T}(wordembeds::Matrix{T}, charembeds::Matrix{T}, ntags::Int)
         x1 = relu(x1)
         x1 = Standardize(T,(dh,10))(x1)
         x += x1
-
-        x2 = dropout(x1, 0.3)
-        x2 = Conv1D(T,5,dh,dh,2,1)(x2)
-        x2 = relu(x2)
-        x2 = Standardize(T,(dh,10))(x2)
-        x += x2
-
-        x3 = dropout(x2, 0.3)
-        x3 = Conv1D(T,5,dh,dh,2,1)(x3)
-        x3 = relu(x3)
-        x3 = Standardize(T,(dh,10))(x3)
-        x += x3
 
         Linear(T,dh,ntags)(x)
     end

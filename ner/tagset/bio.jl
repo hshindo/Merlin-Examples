@@ -1,10 +1,10 @@
 struct BIO
-    dict::Dict
-    tags::Vector
+    tag2id::Dict{String,Int}
+    id2tag::Vector{String}
 end
-BIO() = BIO(Dict("O"=>1), ["O"])
+BIO() = BIO(Dict{String,Int}(), String[])
 
-Base.length(tagset::BIO) = length(tagset.tags)
+Base.length(tagset::BIO) = length(tagset.tag2id)
 
 function encode(tagset::BIO, tags::Vector{String})
     basetag = ""
