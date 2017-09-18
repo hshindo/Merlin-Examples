@@ -101,7 +101,7 @@ function train(ner::NER, traindata::Vector, testdata::Vector)
     =#
 
     wordembeds = h5read(wordembeds_file, "value")
-    charembeds = randn(Float32, 20, length(ner.chardict)) * sqrt(0.01f0)
+    charembeds = randn(Float32, 20, length(ner.chardict)) * sqrt(0.02f0)
     ner.model = Model(wordembeds, charembeds, length(ner.tagset))
     opt = SGD()
     batchsize = 10

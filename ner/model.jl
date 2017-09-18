@@ -5,6 +5,22 @@ struct Model
 end
 
 function Model{T}(wordembeds::Matrix{T}, charembeds::Matrix{T}, ntags::Int)
+    f = @graph (w,cs) begin
+        w = Lookup(wordembeds)(w)
+        batchsize = map(length, cs)
+        c = Lookup(charembeds)(c)
+        c = Conv1D(T,5,d,5d,2,1)(c)
+        c = max(c, 2)
+        x = concat(2, w, c)
+        d = size(wordembeds,1) + size(charembeds,1)*5
+        x = Conv1D(T,5,d,dh,2,1)(x)
+        x = relu(x)
+        x = dropout(x, 0.3)
+        x = Conv1D(T,5,dh,dh,2,1)(x)
+        x = relu(x)
+        Linear(T,dh,ntags)(x)
+    end
+
     fw = @graph x begin
         Lookup(wordembeds)(x)
     end
@@ -12,6 +28,7 @@ function Model{T}(wordembeds::Matrix{T}, charembeds::Matrix{T}, ntags::Int)
     fc = @graph x begin
         d = size(charembeds, 1)
         x = Lookup(charembeds)(x)
+        x = split(x)
         x = Conv1D(T,5,d,5d,2,1)(x)
         max(x, 2)
     end
@@ -22,11 +39,9 @@ function Model{T}(wordembeds::Matrix{T}, charembeds::Matrix{T}, ntags::Int)
         x = Conv1D(T,5,d,dh,2,1)(x)
         x = relu(x)
 
-        x1 = dropout(x, 0.3)
-        x1 = Conv1D(T,5,dh,dh,2,1)(x1)
-        x1 = relu(x1)
-        x1 = Standardize(T,(dh,10))(x1)
-        x += x1
+        x = dropout(x, 0.3)
+        x = Conv1D(T,5,dh,dh,2,1)(x)
+        x = relu(x)
 
         Linear(T,dh,ntags)(x)
     end
