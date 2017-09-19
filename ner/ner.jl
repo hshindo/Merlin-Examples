@@ -28,16 +28,16 @@ end
 function encode_char(ner::NER, words::Vector{String})
     chardict = ner.chardict
     unkchar = chardict["UNKNOWN"]
-    batchdims = Int[]
+    sizes = Tuple{Int}[]
     data = Int[]
     for w in words
         chars = Vector{Char}(w)
-        push!(batchdims, length(chars))
+        push!(sizes, (length(chars),))
         for c in chars
             push!(data, get(chardict,string(c),unkchar))
         end
     end
-    Var(data, batchdims)
+    Var(data, sizes)
 end
 
 function readdata!(ner::NER, path::String)
