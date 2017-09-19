@@ -104,11 +104,10 @@ function train(ner::NER, traindata::Vector, testdata::Vector)
     charembeds = randn(Float32, 20, length(ner.chardict)) * sqrt(0.02f0)
     ner.model = Model(wordembeds, charembeds, length(ner.tagset))
     opt = SGD()
-    batchsize = 10
+    batchsize = 20
     for epoch = 1:50
-        Merlin.config.env["epoch"] = epoch
         println("Epoch:\t$epoch")
-        opt.rate = 0.0005 * batchsize / sqrt(batchsize) / (1 + 0.02*(epoch-1))
+        opt.rate = 0.0005 * batchsize / sqrt(batchsize) / (1 + 0.05*(epoch-1))
         println("opt rate: $(opt.rate)")
         #opt.rate = 0.00075
 
@@ -117,6 +116,8 @@ function train(ner::NER, traindata::Vector, testdata::Vector)
         batches = makebatch(batchsize, traindata)
         loss = minimize!(ner.model, opt, batches)
         println("Loss:\t$loss")
+        #println("Y1:")
+        #display(softmax(ner.model.Y1.data))
 
         # test
         println("Testing...")
