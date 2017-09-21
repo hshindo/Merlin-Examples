@@ -28,16 +28,16 @@ end
 function encode_char(ner::NER, words::Vector{String})
     chardict = ner.chardict
     unkchar = chardict["UNKNOWN"]
-    sizes = Tuple{Int}[]
+    batchdims = Int[]
     data = Int[]
     for w in words
         chars = Vector{Char}(w)
-        push!(sizes, (length(chars),))
+        push!(batchdims, length(chars))
         for c in chars
             push!(data, get(chardict,string(c),unkchar))
         end
     end
-    Var(data, sizes)
+    Var(data, batchdims)
 end
 
 function readdata!(ner::NER, path::String)
@@ -70,11 +70,9 @@ function makebatch(batchsize::Int, data::Vector)
         j = min(i+batchsize-1, length(data))
         batch = data[i:j]
         b = ntuple(length(data[1])) do k
-            x = map(x -> x[k], batch)
-            x = cat(1, x...)
-            x.args = ()
-            x.f = nothing
-            x
+            x = cat(1, map(x -> x[k].data, batch)...)
+            batchdims = cat(1, map(x -> x[k].batchdims, batch)...)
+            Var(x, batchdims)
         end
         push!(batches, b)
     end
@@ -89,22 +87,11 @@ function train(ner::NER, traindata::Vector, testdata::Vector)
     info("# Tags:\t$(length(ner.tagset))")
     testdata = makebatch(200, testdata)
 
-    #=
-    ntags = length(ner.tagset)
-    Y1 = zeros(Float32, ntags, ntags)
-    for (w,c,t) in traindata
-        for i = 1:length(t.data)-1
-            Y1[t.data[i+1],t.data[i]] += 1
-        end
-    end
-    Y1 = Y1 ./ sum(Y1,1)
-    =#
-
     wordembeds = h5read(wordembeds_file, "value")
     charembeds = randn(Float32, 20, length(ner.chardict)) * sqrt(0.02f0)
     ner.model = Model(wordembeds, charembeds, length(ner.tagset))
     opt = SGD()
-    batchsize = 20
+    batchsize = 10
     for epoch = 1:50
         println("Epoch:\t$epoch")
         opt.rate = 0.0005 * batchsize / sqrt(batchsize) / (1 + 0.05*(epoch-1))
@@ -116,8 +103,6 @@ function train(ner::NER, traindata::Vector, testdata::Vector)
         batches = makebatch(batchsize, traindata)
         loss = minimize!(ner.model, opt, batches)
         println("Loss:\t$loss")
-        #println("Y1:")
-        #display(softmax(ner.model.Y1.data))
 
         # test
         println("Testing...")

@@ -1,63 +1,27 @@
 struct Model
-    fw
-    fc
-    fs
+    f
 end
 
 function Model{T}(wordembeds::Matrix{T}, charembeds::Matrix{T}, ntags::Int)
-    f = @graph (w,cs) begin
-        w = Lookup(wordembeds)(w)
-        batchsize = map(length, cs)
-        c = Lookup(charembeds)(c)
+    f = @graph (w,c) begin
+        w = lookup(Embedding(Var(wordembeds)), w)
+        c = lookup(Embedding(Var(charembeds)), c)
+        d = size(charembeds, 1)
         c = Conv1D(T,5,d,5d,2,1)(c)
         c = max(c, 2)
-        x = concat(2, w, c)
-        d = size(wordembeds,1) + size(charembeds,1)*5
-        x = Conv1D(T,5,d,dh,2,1)(x)
-        x = relu(x)
-        x = dropout(x, 0.3)
-        x = Conv1D(T,5,dh,dh,2,1)(x)
-        x = relu(x)
-        Linear(T,dh,ntags)(x)
-    end
+        c = split(c, batchsize(w))
 
-    fw = @graph x begin
-        Lookup(wordembeds)(x)
-    end
-
-    fc = @graph x begin
-        d = size(charembeds, 1)
-        x = Lookup(charembeds)(x)
-        x = split(x)
-        x = Conv1D(T,5,d,5d,2,1)(x)
-        max(x, 2)
-    end
-
-    fs = @graph x begin
+        x = concat(1, w, c)
         d = size(wordembeds,1) + size(charembeds,1)*5
         dh = 300
         x = Conv1D(T,5,d,dh,2,1)(x)
         x = relu(x)
-
         x = dropout(x, 0.3)
         x = Conv1D(T,5,dh,dh,2,1)(x)
         x = relu(x)
-
-        x2 = dropout(x1, 0.3)
-        x2 = Conv1D(T,5,dh,dh,2,1)(x2)
-        x2 = relu(x2)
-        x2 = Standardize(T,(dh,10))(x2)
-        x += x2
-
-        x3 = dropout(x2, 0.3)
-        x3 = Conv1D(T,5,dh,dh,2,1)(x3)
-        x3 = relu(x3)
-        x3 = Standardize(T,(dh,10))(x3)
-        x += x3
-
         Linear(T,dh,ntags)(x)
     end
-    Model(fw, fc, fs)
+    Model(f)
 end
 
 function (m::Model)(data::Tuple)
@@ -69,11 +33,12 @@ function (m::Model)(data::Tuple)
     #end
     #p = Var(cat(2, ps...))
 
-    w = m.fw(w)
-    c = m.fc(c)
-    c.batchdims = w.batchdims
-    x = cat(1, w, c)
-    y = m.fs(x)
+    #w = m.fw(w)
+    #c = m.fc(c)
+    #c.batchdims = w.batchdims
+    #x = cat(1, w, c)
+    #y = m.fs(x)
+    y = m.f(w, c)
     if Merlin.config.train
         softmax_crossentropy(t, y)
     else
