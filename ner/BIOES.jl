@@ -4,8 +4,6 @@ struct BIOES
 end
 BIOES() = BIOES(Dict{String,Int}(), String[])
 
-Base.length(tagset::BIOES) = length(tagset.tag2id)
-
 function encode(tagset::BIOES, tags::Vector{String})
     map(tags) do tag
         get!(tagset.tag2id, tag) do

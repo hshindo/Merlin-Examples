@@ -4,8 +4,8 @@ end
 
 function Model{T}(wordembeds::Matrix{T}, charembeds::Matrix{T}, ntags::Int)
     f = @graph (w,c) begin
-        w = lookup(Embedding(Var(wordembeds)), w)
-        c = lookup(Embedding(Var(charembeds)), c)
+        w = Lookup(wordembeds)(w)
+        c = Lookup(charembeds)(c)
         d = size(charembeds, 1)
         c = Conv1D(T,5,d,5d,2,1)(c)
         c = max(c, 2)
