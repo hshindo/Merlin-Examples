@@ -108,19 +108,20 @@ function train(ner::NER, traindata::Vector, testdata::Vector)
         Merlin.config.train = true
         shuffle!(traindata)
         batches = makebatch(batchsize, traindata)
-        prog = Progress(length(traindata))
+        prog = Progress(length(batches))
         loss = 0.0
-        for i in 1:length(traindata)
+        for i in 1:length(batches)
             #w, c, t = traindata[i]
-            y = ner.model(traindata[i])
+            y = ner.model(batches[i])
             #y = softmax_crossentropy(t, h)
             loss += sum(y.data)
             vars = gradient!(y)
-            Merlin.update!(vars, opt)
+            update!(vars, opt)
             next!(prog)
         end
 
         #loss = minimize!(ner.model, opt, batches)
+        loss /= length(batches)
         println("Loss:\t$loss")
 
         # test
