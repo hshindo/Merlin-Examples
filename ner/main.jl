@@ -2,7 +2,7 @@ using HDF5
 using Merlin
 
 include("eval.jl")
-include("tagset/bioes.jl")
+include("BIOES.jl")
 include("ner.jl")
 include("model.jl")
 

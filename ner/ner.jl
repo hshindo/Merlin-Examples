@@ -1,3 +1,5 @@
+using ProgressMeter
+
 mutable struct NER
     worddict::Dict
     chardict::Dict
@@ -6,7 +8,7 @@ mutable struct NER
 end
 
 function NER()
-    words = h5read(wordembeds_file, "words")
+    words = h5read(wordembeds_file, "key")
     worddict = Dict(words[i] => i for i=1:length(words))
     chardict = Dict("UNKNOWN" => 1)
     for word in words
@@ -23,7 +25,7 @@ function encode_word(ner::NER, words::Vector{String})
     unkword = worddict["UNKNOWN"]
     ids = map(words) do w
         w = lowercase(w)
-        w = replace(word, r"[0-9]", '0')
+        # w = replace(word, r"[0-9]", '0')
         get(worddict, w, unkword)
     end
     Var(ids)
@@ -35,7 +37,7 @@ function encode_char(ner::NER, words::Vector{String})
     batchdims = Int[]
     ids = Int[]
     for w in words
-        w = replace(word, r"[0-9]", '0')
+        # w = replace(word, r"[0-9]", '0')
         chars = Vector{Char}(w)
         push!(batchdims, length(chars))
         for c in chars
@@ -46,7 +48,7 @@ function encode_char(ner::NER, words::Vector{String})
 end
 
 function readdata!(ner::NER, path::String)
-    data = []
+    data = Tuple[]
     words, tags = String[], String[]
     lines = open(readlines, path)
     for i = 1:length(lines)
@@ -91,12 +93,12 @@ function train(ner::NER, traindata::Vector, testdata::Vector)
     info("# Tags:\t$(length(ner.tagset.tag2id))")
     testdata = makebatch(200, testdata)
 
-    wordembeds = Embedding(h5read(wordembeds_file,"vectors"))
-    charembeds = Embedding(Float32, length(ner.chardict), 20, init_w=Uniform(0.01))
-    #charembeds = randn(Float32, 20, length(ner.chardict)) * sqrt(0.02f0)
-    ner.model = Model(wordembeds, charembeds, length(ner.tagset))
+    wordembeds = h5read(wordembeds_file, "value")
+    #charembeds = Embedding(Float32, length(ner.chardict), 20, init_w=Uniform(0.01))
+    charembeds = randn(Float32, 20, length(ner.chardict)) * sqrt(0.01f0)
+    ner.model = Model(wordembeds, charembeds, length(ner.tagset.tag2id))
     opt = SGD()
-    batchsize = 20
+    batchsize = 10
     for epoch = 1:50
         println("Epoch:\t$epoch")
         opt.rate = 0.0005 * batchsize / sqrt(batchsize) / (1 + 0.05*(epoch-1))
@@ -108,17 +110,13 @@ function train(ner::NER, traindata::Vector, testdata::Vector)
         batches = makebatch(batchsize, traindata)
         prog = Progress(length(traindata))
         loss = 0.0
-        for i in randperm()
-            w, c, t = ()
-            h = ner.model(w, c, t)
-            y = softmax_crossentropy(t, h)
+        for i in 1:length(traindata)
+            #w, c, t = traindata[i]
+            y = ner.model(traindata[i])
+            #y = softmax_crossentropy(t, h)
             loss += sum(y.data)
-            nodes = gradient!(y)
-            for v in nodes
-                if isempty(v.args) && !isvoid(v.grad)
-                    opt(v.data, v.grad)
-                end
-            end
+            vars = gradient!(y)
+            Merlin.update!(vars, opt)
             next!(prog)
         end
 
@@ -139,7 +137,7 @@ function train(ner::NER, traindata::Vector, testdata::Vector)
     end
 end
 
-function test(ner::NER, data)
+function test2(ner::NER, data)
     println("Testing...")
     Merlin.config.train = false
     pred = cat(1, map(ner.model, data)...)
