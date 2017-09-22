@@ -9,7 +9,7 @@ function Model{T}(wordembeds::Matrix{T}, charembeds::Matrix{T}, ntags::Int)
         d = size(charembeds, 1)
         c = Conv1D(T,5,d,5d,2,1)(c)
         c = max(c, 2)
-        c = split(c, batchsize(w))
+        c = resize(c, batchsize(w))
 
         x = concat(1, w, c)
         d = size(wordembeds,1) + size(charembeds,1)*5
