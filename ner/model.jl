@@ -1,18 +1,19 @@
 struct Model
-    f
+    nn
 end
 
-function Model{T}(wordembeds::Matrix{T}, charembeds::Matrix{T}, ntags::Int)
-    f = @graph (w,c) begin
-        w = lookup(Embedding(wordembeds), w)
-        c = lookup(Embedding(charembeds), c)
-        d = size(charembeds, 1)
+function Model(wordembeds::Vector{Var}, charembeds::Vector{Var}, ntags::Int)
+    T = eltype(wordembeds[1].data)
+    nn = @graph (w,c) begin
+        w = lookup(wordembeds, w)
+        c = lookup(charembeds, c)
+        d = size(charembeds[1], 1)
         c = Conv1D(T,5,d,5d,2,1)(c)
         c = max(c, 2)
-        c = resize(c, batchsize(w))
+        c = resize(c, Node(batchsize,w))
 
         x = concat(1, w, c)
-        d = size(wordembeds,1) + size(charembeds,1)*5
+        d = size(wordembeds[1],1) + 5size(charembeds[1],1)
         dh = 300
         x = Conv1D(T,5,d,dh,2,1)(x)
         x = relu(x)
@@ -21,30 +22,10 @@ function Model{T}(wordembeds::Matrix{T}, charembeds::Matrix{T}, ntags::Int)
         x = relu(x)
         Linear(T,dh,ntags)(x)
     end
-    Model(f)
+    Model(nn)
 end
 
-function (m::Model)(data::Tuple)
-    w, c, t = data
-
-    #ps = Matrix{Float32}[]
-    #for i in batchsize_w.data
-    #    push!(ps, setup_posembeds(Float32,50,i))
-    #end
-    #p = Var(cat(2, ps...))
-
-    #w = m.fw(w)
-    #c = m.fc(c)
-    #c.batchdims = w.batchdims
-    #x = cat(1, w, c)
-    #y = m.fs(x)
-    y = m.f(w, c)
-    if Merlin.config.train
-        softmax_crossentropy(t, y)
-    else
-        vec(argmax(y.data,1))
-    end
-end
+(m::Model)(w, c) = m.nn(w, c)
 
 function setup_posembeds{T}(::Type{T}, dim::Int, len::Int)
     embeds = zeros(T, dim, len)
