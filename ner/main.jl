@@ -1,7 +1,6 @@
 using HDF5
 using Merlin
 
-include("eval.jl")
 include("BIOES.jl")
 include("ner.jl")
 include("model.jl")
@@ -15,7 +14,7 @@ ner = NER()
 traindata = readdata!(ner, ".data/eng.train.BIOES")
 testdata = readdata!(ner, ".data/eng.testb.BIOES")
 train(ner, traindata, testdata)
-#save("NER.jld2", Dict("a"=>seg))
+
 
 # decoding
 #seg = load("NER.jld2")

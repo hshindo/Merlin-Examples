@@ -1,4 +1,4 @@
-using ProgressMeter
+import ProgressMeter: Progress
 
 mutable struct NER
     worddict::Dict
@@ -94,7 +94,7 @@ function train(ner::NER, traindata::Vector, testdata::Vector)
     testdata = makebatch(100, testdata)
 
     wordembeds = embeddings(h5read(wordembeds_file,"value"))
-    charembeds = embeddings(Float32, length(ner.chardict), 20)
+    charembeds = embeddings(Float32, length(ner.chardict), 20, init_w=Normal(0,0.05))
     ner.model = Model(wordembeds, charembeds, length(ner.tagset.tag2id))
     batchsize = 10
     opt = SGD()
@@ -115,27 +115,51 @@ function train(ner::NER, traindata::Vector, testdata::Vector)
             y = softmax_crossentropy(t, h)
             loss += sum(y.data)
             params = gradient!(y)
-            foreach(p -> update!(p,opt), params)
-            next!(prog)
+            foreach(p -> opt(p.data,p.grad), params)
+            ProgressMeter.next!(prog)
         end
         loss /= length(batches)
         println("Loss:\t$loss")
 
-        # test
-        println("Testing...")
-        Merlin.config.train = false
-        pred = Int[]
-        gold = Int[]
-        for (w,c,t) in testdata
-            y = ner.model(w, c)
-            append!(pred, vec(argmax(y.data,1)))
-            append!(gold, t.data)
-        end
-        length(pred) == length(gold) || throw("Length mismatch: $(length(pred)), $(length(gold))")
-
-        ranges_p = decode(ner.tagset, pred)
-        ranges_g = decode(ner.tagset, gold)
-        fscore(ranges_g, ranges_p)
-        println()
+        # epoch % 1 == 0 && save(ner.model.nn,"epoch$(epoch).merlin")
+        test(ner, testdata)
     end
+end
+
+function test(ner::NER, data::Vector)
+    println("Testing...")
+    Merlin.config.train = false
+    pred = Int[]
+    gold = Int[]
+    for (w,c,t) in data
+        y = ner.model(w, c)
+        append!(pred, vec(argmax(y.data,1)))
+        append!(gold, t.data)
+    end
+    length(pred) == length(gold) || throw("Length mismatch: $(length(pred)), $(length(gold))")
+
+    ranges_p = decode(ner.tagset, pred)
+    ranges_g = decode(ner.tagset, gold)
+    fscore(ranges_g, ranges_p)
+end
+
+function save(nn, path::String)
+    println("Saving...")
+    params = getparams(nn)
+    h5open(path, "w") do f
+        for i = 1:length(params)
+            write(f, "$i", params[i].data)
+        end
+    end
+end
+
+function fscore{T}(golds::Vector{T}, preds::Vector{T})
+    set = intersect(Set(golds), Set(preds))
+    count = length(set)
+    prec = round(count/length(preds), 5)
+    recall = round(count/length(golds), 5)
+    fval = round(2*recall*prec/(recall+prec), 5)
+    println("Prec:\t$prec")
+    println("Recall:\t$recall")
+    println("Fscore:\t$fval")
 end
