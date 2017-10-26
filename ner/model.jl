@@ -1,35 +1,29 @@
-struct Model
-    g
-end
-
-function Model(wordembeds::Vector{Var}, charembeds::Vector{Var}, ntags::Int)
+function setup_model(wordembeds::Vector{Var}, charembeds::Vector{Var}, ntags::Int)
     T = eltype(wordembeds[1])
-    xw = Node()
-    w = Node(lookup, wordembeds, xw)
+    w = Node()
+    hw = lookup(wordembeds, w)
 
-    xc = Node()
-    c = Node(lookup, charembeds, xc)
+    c = Node()
+    hc = lookup(charembeds, c)
     d = size(charembeds[1], 1)
-    c = Node(Conv1D(T,5,d,5d,2,1), c)
-    c = Node(max, c, 2)
-    c = Node(resize, c, Node(batchsize,w))
+    hc = Conv1D(T,5,d,5d,2,1)(hc)
+    hc = max(hc, 2)
+    hc = resize(hc, batchsize(w))
 
-    x = Node(concat, 1, w, c)
+    h = concat(1, hw, hc)
     d = size(wordembeds[1],1) + 5size(charembeds[1],1)
     dh = 300
-    x = Node(Conv1D(T,5,d,dh,2,1), x)
-    x = Node(relu, x)
+    h = Conv1D(T,5,d,dh,2,1)(h)
+    h = relu(h)
 
-    x = Node(dropout, x, 0.3)
-    x = Node(Conv1D(T,5,dh,dh,2,1), x)
-    x = Node(relu, x)
-    x = Node(Linear(T,dh,ntags), x)
-    g = Graph(input=(xw,xc), output=x)
-    Model(g)
+    #x = Node(dropout, x, 0.3)
+    #x = Node(Conv1D(T,5,dh,dh,2,1), x)
+    #x = Node(relu, x)
+    #x = Node(Linear(T,dh,ntags), x)
+    Graph(input=(w,c), output=h)
 end
 
-(m::Model)(w, c) = m.g(w, c)
-
+#=
 function setup_posembeds{T}(::Type{T}, dim::Int, len::Int)
     embeds = zeros(T, dim, len)
     for p = 1:len
@@ -41,3 +35,4 @@ function setup_posembeds{T}(::Type{T}, dim::Int, len::Int)
     end
     embeds
 end
+=#
